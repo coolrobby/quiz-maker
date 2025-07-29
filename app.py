@@ -12,7 +12,7 @@ import string
 
 # 设置页面配置
 st.set_page_config(
-    page_title="题目大师 - 智能题库生成器",
+    page_title="Quiz Maker",
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -831,8 +831,7 @@ def main():
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: #6c757d; padding: 2rem 0;">
-        <p>📚 <strong>题目大师</strong> - 让学习更高效 | 🔧 技术支持：川哥</p>
-        <p>💡 支持选择题、填空题 | 📱 完美适配移动端 | 🎯 智能题型识别</p>
+        <p>技术支持：川哥</p>
     </div>
     """, unsafe_allow_html=True)
 
