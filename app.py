@@ -439,33 +439,90 @@ def main():
                 </div>
                 """, unsafe_allow_html=True)
             
-            # 文件详情
-            with st.expander("📊 文件处理详情", expanded=True):
-                for file_info in processed_files:
-                    st.markdown(f"""
-                    **📄 {file_info['filename']}**
-                    - 生成文件：{file_info['html_filename']}
-                    - 总题数：{file_info['stats']['total']}
-                    - 选择题：{file_info['stats']['choice']} 题
-                    - 填空题：{file_info['stats']['fill']} 题
-                    {f"- 三选项：{file_info['stats']['choice_3']} 题，四选项：{file_info['stats']['choice_4']} 题" if file_info['stats']['choice'] > 0 else ""}
-                    """)
+
             
-            # 下载区域
+            # HTML文件列表和预览区域
             st.markdown('<div class="download-section">', unsafe_allow_html=True)
-            st.markdown("### 📥 下载生成的HTML文件")
+            st.markdown("### 📄 生成的HTML文件列表")
             
-            if len(processed_files) == 1:
-                # 单个文件直接下载
-                file_info = processed_files[0]
-                st.download_button(
-                    label=f"📄 下载 {file_info['html_filename']}",
-                    data=file_info['html_content'].encode('utf-8'),
-                    file_name=file_info['html_filename'],
-                    mime="text/html",
-                    use_container_width=True
-                )
-            else:
+            # 显示所有生成的HTML文件
+            for i, file_info in enumerate(processed_files):
+                with st.expander(f"📄 {file_info['html_filename']} - {file_info['stats']['total']} 题", expanded=False):
+                    col1, col2 = st.columns([3, 1])
+                    
+                    with col1:
+                        st.markdown(f"""
+                        **文件信息：**
+                        - 📁 原文件：{file_info['filename']}
+                        - 📄 HTML文件：{file_info['html_filename']}
+                        - 📊 总题数：{file_info['stats']['total']} 题
+                        - ✅ 选择题：{file_info['stats']['choice']} 题
+                        - ✏️ 填空题：{file_info['stats']['fill']} 题
+                        {f"- 🔢 三选项：{file_info['stats']['choice_3']} 题，四选项：{file_info['stats']['choice_4']} 题" if file_info['stats']['choice'] > 0 else ""}
+                        """)
+                    
+                    with col2:
+                        # 单个文件下载按钮
+                        st.download_button(
+                            label="📥 下载",
+                            data=file_info['html_content'].encode('utf-8'),
+                            file_name=file_info['html_filename'],
+                            mime="text/html",
+                            key=f"download_single_{i}",
+                            use_container_width=True
+                        )
+                    
+                    # HTML预览区域
+                    st.markdown("**📱 HTML预览：**")
+                    
+                    # 创建预览选项卡
+                    preview_tab1, preview_tab2 = st.tabs(["🖥️ 渲染预览", "📝 源码预览"])
+                    
+                    with preview_tab1:
+                         # 实际HTML预览 - 可以真正做题
+                         st.markdown("**🎮 互动答题预览：**")
+                         st.info("💡 下方是完整的答题界面，您可以直接体验做题功能！")
+                         
+                         # 使用streamlit的components.html来嵌入完整的HTML
+                         import streamlit.components.v1 as components
+                         
+                         # 渲染完整的HTML内容，允许用户真正做题
+                         components.html(
+                             file_info['html_content'],
+                             height=800,
+                             scrolling=True
+                         )
+                         
+                         # 添加使用提示
+                         st.markdown("""
+                         <div style="background: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px; padding: 15px; margin: 10px 0;">
+                             <h4 style="color: #1976d2; margin-top: 0;">🎯 预览说明</h4>
+                             <ul style="color: #1565c0; margin-bottom: 0;">
+                                 <li>✅ 上方是完整的答题界面，功能与下载的HTML文件完全一致</li>
+                                 <li>🎮 您可以直接点击"开始答题"按钮体验完整的答题流程</li>
+                                 <li>📊 支持题目乱序、选项乱序、答题统计等所有功能</li>
+                                 <li>💾 如果满意效果，请使用右侧的下载按钮获取HTML文件</li>
+                                 <li>📱 下载的HTML文件可以离线使用，完美适配手机端</li>
+                             </ul>
+                         </div>
+                         """, unsafe_allow_html=True)
+                    
+                    with preview_tab2:
+                        # 源码预览
+                        st.markdown("**📝 HTML源码预览（前1000字符）：**")
+                        preview_content = file_info['html_content'][:1000]
+                        if len(file_info['html_content']) > 1000:
+                            preview_content += "\n\n... (内容已截断，下载完整文件查看全部内容) ..."
+                        
+                        st.code(preview_content, language='html')
+                        
+                        st.info(f"📏 完整文件大小：{len(file_info['html_content'])} 字符")
+            
+            # 批量下载区域
+            st.markdown("---")
+            st.markdown("### 📦 批量下载")
+            
+            if len(processed_files) > 1:
                 # 多个文件打包下载
                 zip_buffer = BytesIO()
                 with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
@@ -477,53 +534,31 @@ def main():
                 
                 zip_buffer.seek(0)
                 
-                st.download_button(
-                    label=f"📦 下载所有文件 ({len(processed_files)} 个HTML文件)",
-                    data=zip_buffer.getvalue(),
-                    file_name=f"题目大师_生成文件_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
-                    mime="application/zip",
-                    use_container_width=True
-                )
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    st.markdown(f"""
+                    **📦 打包下载所有文件**
+                    - 📁 包含文件：{len(processed_files)} 个HTML文件
+                    - 📊 总题数：{total_stats['total']} 题
+                    - 💾 压缩格式：ZIP
+                    """)
                 
-                # 单独下载选项
-                st.markdown("**或单独下载：**")
-                cols = st.columns(min(3, len(processed_files)))
-                for i, file_info in enumerate(processed_files):
-                    with cols[i % len(cols)]:
-                        st.download_button(
-                            label=f"📄 {file_info['html_filename']}",
-                            data=file_info['html_content'].encode('utf-8'),
-                            file_name=file_info['html_filename'],
-                            mime="text/html",
-                            key=f"download_{i}"
-                        )
+                with col2:
+                    st.download_button(
+                        label=f"📦 下载全部 ({len(processed_files)} 个文件)",
+                        data=zip_buffer.getvalue(),
+                        file_name=f"题目大师_生成文件_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                        mime="application/zip",
+                        use_container_width=True
+                    )
+            else:
+                st.info("💡 只有一个文件时，请使用上方的单个下载按钮")
             
             st.markdown('</div>', unsafe_allow_html=True)
             
 
     
-    # 使用说明
-    with st.expander("📚 使用说明", expanded=False):
-        st.markdown("""
-        ### 🚀 快速开始
-        1. **准备Excel文件**：按照格式要求准备题目文件
-        2. **上传文件**：支持批量上传多个Excel文件
-        3. **自动处理**：系统自动识别题目类型并生成HTML
-        4. **下载使用**：下载生成的HTML文件，可离线使用
-        
-        ### 📱 HTML文件特性
-        - **📱 移动优化**：完美适配手机端使用
-        - **🔄 离线可用**：无需网络连接即可使用
-        - **🎨 精美界面**：欧美大学风格设计
-        - **📊 智能统计**：详细的答题报告和分析
-        - **🔀 灵活控制**：用户可控制题目和选项乱序
-        
-        ### 💡 最佳实践
-        - 建议每个Excel文件包含同一主题的题目
-        - 选择题答案请填写具体选项内容，不要填写A、B、C、D
-        - 填空题答案支持大小写不敏感匹配
-        - 生成的HTML文件可直接分享给学生使用
-        """)
+
     
     # 备份功能
     if st.button("💾 备份项目到百度网盘同步文件夹", use_container_width=True):
@@ -538,7 +573,7 @@ def main():
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: #6c757d; padding: 2rem 0;">
-        <p>📚 <strong>题目大师</strong> - 让学习更高效 | 🔧 基于 Streamlit 构建</p>
+        <p>📚 <strong>题目大师</strong> - 让学习更高效 | 🔧 技术支持：川哥</p>
         <p>💡 支持选择题、填空题 | 📱 完美适配移动端 | 🎯 智能题型识别</p>
     </div>
     """, unsafe_allow_html=True)
