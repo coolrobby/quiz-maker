@@ -496,34 +496,7 @@ def main():
         - **生成链接**：点击每个网页标题旁的“生成链接”按钮，可以将生成的网页上传到坦克云课堂服务器，然后生成一个链接
         """)
     
-    # FTP配置状态检查
-    with st.expander("🔧 FTP配置状态", expanded=False):
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            try:
-                ftp_host = st.secrets.get("ftp", "未配置")
-                ftp_user = st.secrets.get("user", "未配置")
-                
-                # 检查配置状态
-                if (ftp_host == "未配置" or ftp_host == "your-ftp-host.com" or 
-                    ftp_user == "未配置" or ftp_user == "your-ftp-username"):
-                    st.warning("⚠️ FTP配置未完成，无法使用生成链接功能")
-                    st.info("请编辑 `.streamlit/secrets.toml` 文件配置FTP服务器信息")
-                else:
-                    st.success(f"✅ FTP配置已完成 - 服务器: {ftp_host}, 用户: {ftp_user}")
-                    
-            except Exception:
-                st.error("❌ 无法读取FTP配置，请检查 `.streamlit/secrets.toml` 文件")
-        
-        with col2:
-            if st.button("🧪 测试连接", help="测试FTP服务器连接是否正常"):
-                with st.spinner("正在测试FTP连接..."):
-                    success, message = test_ftp_connection()
-                    if success:
-                        st.success(message)
-                    else:
-                        st.error(message)
+
     
     # 创建两个选项卡：从input文件夹选择和上传文件
     tab1, tab2 = st.tabs(["📂 从input文件夹选择", "📁 上传Excel文件"])
@@ -824,7 +797,7 @@ def main():
 
     
     # 备份功能
-    if st.button("💾 备份。非管理员请勿点击，会死机。", use_container_width=True):
+    if st.button("💾 备份", use_container_width=True):
         with st.spinner("正在备份项目..."):
             success, result = create_backup()
             if success:
