@@ -284,36 +284,7 @@ def generate_html_file(questions, filename, stats):
     except Exception as e:
         return None
 
-def create_backup():
-    """创建项目备份"""
-    try:
-        # 生成带时间戳的备份文件夹名
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup_base_dir = "D:\\BaiduSyncdisk\\坦克云课堂题目大师"
-        backup_dir = os.path.join(backup_base_dir, f"坦克云课堂题目大师2_{timestamp}")
-        current_dir = os.getcwd()
-        
-        # 确保备份目录存在
-        os.makedirs(backup_dir, exist_ok=True)
-        
-        # 复制整个项目
-        for item in os.listdir(current_dir):
-            if item.startswith('.') or item == '__pycache__':
-                continue
-                
-            source_path = os.path.join(current_dir, item)
-            dest_path = os.path.join(backup_dir, item)
-            
-            if os.path.isdir(source_path):
-                if os.path.exists(dest_path):
-                    shutil.rmtree(dest_path)
-                shutil.copytree(source_path, dest_path)
-            else:
-                shutil.copy2(source_path, dest_path)
-        
-        return True, "备份成功"
-    except Exception as e:
-        return False, str(e)
+
 
 def main():
     """主函数"""
