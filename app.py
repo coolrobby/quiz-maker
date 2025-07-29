@@ -217,13 +217,72 @@ def process_excel_file(file_obj):
     except Exception as e:
         return None, f"处理文件时出错: {str(e)}"
 
-def upload_to_ftp(html_content, original_filename):
-    """上传HTML文件到FTP服务器并返回访问链接"""
+def test_ftp_connection():
+    """测试FTP连接是否正常"""
+    ftp = None
     try:
         # 从secrets获取FTP配置
         ftp_host = st.secrets["ftp"]
         ftp_user = st.secrets["user"]
         ftp_password = st.secrets["password"]
+        
+        # 验证配置是否为空
+        if not ftp_host or ftp_host == "your-ftp-host.com":
+            return False, "请在.streamlit/secrets.toml中配置正确的FTP主机地址"
+        if not ftp_user or ftp_user == "your-ftp-username":
+            return False, "请在.streamlit/secrets.toml中配置正确的FTP用户名"
+        if not ftp_password or ftp_password == "your-ftp-password":
+            return False, "请在.streamlit/secrets.toml中配置正确的FTP密码"
+        
+        # 连接FTP服务器
+        ftp = ftplib.FTP()
+        ftp.set_debuglevel(0)
+        
+        # 尝试连接
+        if ':' in ftp_host:
+            host, port = ftp_host.split(':')
+            port = int(port)
+        else:
+            host = ftp_host
+            port = 21
+        
+        ftp.connect(host, port, timeout=30)
+        ftp.login(ftp_user, ftp_password)
+        
+        # 测试基本操作（列出根目录）
+        ftp.nlst()
+        
+        ftp.quit()
+        return True, "FTP连接测试成功！"
+        
+    except Exception as e:
+        return False, f"FTP连接测试失败：{str(e)}"
+    finally:
+        if ftp:
+            try:
+                ftp.quit()
+            except:
+                try:
+                    ftp.close()
+                except:
+                    pass
+
+def upload_to_ftp(html_content, original_filename):
+    """上传HTML文件到FTP服务器并返回访问链接"""
+    ftp = None
+    try:
+        # 从secrets获取FTP配置
+        ftp_host = st.secrets["ftp"]
+        ftp_user = st.secrets["user"]
+        ftp_password = st.secrets["password"]
+        
+        # 验证配置是否为空
+        if not ftp_host or ftp_host == "your-ftp-host.com":
+            return False, "请在.streamlit/secrets.toml中配置正确的FTP主机地址", None
+        if not ftp_user or ftp_user == "your-ftp-username":
+            return False, "请在.streamlit/secrets.toml中配置正确的FTP用户名", None
+        if not ftp_password or ftp_password == "your-ftp-password":
+            return False, "请在.streamlit/secrets.toml中配置正确的FTP密码", None
         
         # 生成新的文件名：tkykt.com + 当前日期时间 + 6位随机数
         current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -232,30 +291,59 @@ def upload_to_ftp(html_content, original_filename):
         
         # 连接FTP服务器
         ftp = ftplib.FTP()
-        ftp.connect(ftp_host, 21)
-        ftp.login(ftp_user, ftp_password)
         
-        # 切换到webpages目录（如果不存在则创建）
+        # 设置超时时间
+        ftp.set_debuglevel(0)  # 关闭调试模式
+        
+        # 尝试连接（添加端口号和超时设置）
         try:
-            ftp.cwd('webpages')
-        except ftplib.error_perm:
-            ftp.mkd('webpages')
-            ftp.cwd('webpages')
+            # 如果主机名包含端口，分离主机和端口
+            if ':' in ftp_host:
+                host, port = ftp_host.split(':')
+                port = int(port)
+            else:
+                host = ftp_host
+                port = 21
+            
+            ftp.connect(host, port, timeout=30)
+        except Exception as conn_error:
+            return False, f"无法连接到FTP服务器 {ftp_host}：{str(conn_error)}。请检查主机地址是否正确，网络是否正常。", None
         
-        # 上传文件
-        html_bytes = html_content.encode('utf-8')
-        ftp.storbinary(f'STOR {new_filename}', BytesIO(html_bytes))
+        # 登录
+        try:
+            ftp.login(ftp_user, ftp_password)
+        except Exception as login_error:
+            return False, f"FTP登录失败：{str(login_error)}。请检查用户名和密码是否正确。", None
+        
+        # 上传文件到根目录
+        try:
+            html_bytes = html_content.encode('utf-8')
+            ftp.storbinary(f'STOR {new_filename}', BytesIO(html_bytes))
+        except Exception as upload_error:
+            return False, f"文件上传失败：{str(upload_error)}", None
         
         # 关闭FTP连接
         ftp.quit()
         
-        # 生成访问链接
-        access_url = f"https://www.tkyktbackup.com/webpages/{new_filename}"
+        # 生成访问链接（直接指向根目录）
+        access_url = f"https://www.tkyktbackup.com/{new_filename}"
         
         return True, access_url, new_filename
         
+    except KeyError as key_error:
+        return False, f"配置错误：缺少必要的FTP配置项 {str(key_error)}。请检查.streamlit/secrets.toml文件。", None
     except Exception as e:
-        return False, str(e), None
+        return False, f"上传过程中发生未知错误：{str(e)}", None
+    finally:
+        # 确保FTP连接被关闭
+        if ftp:
+            try:
+                ftp.quit()
+            except:
+                try:
+                    ftp.close()
+                except:
+                    pass
 
 def generate_html_file(questions, filename, stats):
     """生成HTML文件"""
@@ -385,6 +473,7 @@ def main():
         - **📱 移动优化**：完美适配手机、平板、电脑
         - **🔀 灵活控制**：用户可控制题目和选项乱序
         - **📊 详细统计**：完整的答题报告和错题回顾
+        - **🔗 在线分享**：一键上传生成在线访问链接
         
         ### 📋 Excel格式要求
         | 列名 | 说明 | 必需 |
@@ -401,6 +490,35 @@ def main():
         - **三选项选择题**：ABC有内容，D选项为空
         - **填空题**：所有选项字段为空
         """)
+    
+    # FTP配置状态检查
+    with st.expander("🔧 FTP配置状态", expanded=False):
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            try:
+                ftp_host = st.secrets.get("ftp", "未配置")
+                ftp_user = st.secrets.get("user", "未配置")
+                
+                # 检查配置状态
+                if (ftp_host == "未配置" or ftp_host == "your-ftp-host.com" or 
+                    ftp_user == "未配置" or ftp_user == "your-ftp-username"):
+                    st.warning("⚠️ FTP配置未完成，无法使用生成链接功能")
+                    st.info("请编辑 `.streamlit/secrets.toml` 文件配置FTP服务器信息")
+                else:
+                    st.success(f"✅ FTP配置已完成 - 服务器: {ftp_host}, 用户: {ftp_user}")
+                    
+            except Exception:
+                st.error("❌ 无法读取FTP配置，请检查 `.streamlit/secrets.toml` 文件")
+        
+        with col2:
+            if st.button("🧪 测试连接", help="测试FTP服务器连接是否正常"):
+                with st.spinner("正在测试FTP连接..."):
+                    success, message = test_ftp_connection()
+                    if success:
+                        st.success(message)
+                    else:
+                        st.error(message)
     
     # 创建两个选项卡：从input文件夹选择和上传文件
     tab1, tab2 = st.tabs(["📂 从input文件夹选择", "📁 上传Excel文件"])
