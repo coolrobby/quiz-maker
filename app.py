@@ -442,7 +442,6 @@ def main():
 
             
             # HTML文件列表和预览区域
-            st.markdown('<div class="download-section">', unsafe_allow_html=True)
             st.markdown("### 📄 生成的HTML文件列表")
             
             # 显示所有生成的HTML文件
@@ -558,16 +557,6 @@ def main():
             
 
     
-
-    
-    # 备份功能
-    if st.button("💾 备份项目到百度网盘同步文件夹", use_container_width=True):
-        with st.spinner("正在备份项目..."):
-            success, result = create_backup()
-            if success:
-                st.success(f"✅ {result}")
-            else:
-                st.error(f"❌ 备份失败: {result}")
     
     # 页脚信息
     st.markdown("---")
