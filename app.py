@@ -325,8 +325,8 @@ def upload_to_ftp(html_content, original_filename):
         # 关闭FTP连接
         ftp.quit()
         
-        # 生成访问链接（直接指向根目录）
-        access_url = f"https://www.tkyktbackup.com/{new_filename}"
+        # 生成访问链接（FTP根目录对应网站的webpages目录）
+        access_url = f"https://www.tkyktbackup.com/webpages/{new_filename}"
         
         return True, access_url, new_filename
         
