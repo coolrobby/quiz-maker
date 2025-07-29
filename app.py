@@ -6,6 +6,9 @@ import zipfile
 from io import BytesIO
 import shutil
 from datetime import datetime
+import ftplib
+import random
+import string
 
 # 设置页面配置
 st.set_page_config(
@@ -214,6 +217,46 @@ def process_excel_file(file_obj):
     except Exception as e:
         return None, f"处理文件时出错: {str(e)}"
 
+def upload_to_ftp(html_content, original_filename):
+    """上传HTML文件到FTP服务器并返回访问链接"""
+    try:
+        # 从secrets获取FTP配置
+        ftp_host = st.secrets["ftp"]
+        ftp_user = st.secrets["user"]
+        ftp_password = st.secrets["password"]
+        
+        # 生成新的文件名：tkykt.com + 当前日期时间 + 6位随机数
+        current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        random_suffix = ''.join(random.choices(string.digits, k=6))
+        new_filename = f"tkykt.com_{current_time}_{random_suffix}.html"
+        
+        # 连接FTP服务器
+        ftp = ftplib.FTP()
+        ftp.connect(ftp_host, 21)
+        ftp.login(ftp_user, ftp_password)
+        
+        # 切换到webpages目录（如果不存在则创建）
+        try:
+            ftp.cwd('webpages')
+        except ftplib.error_perm:
+            ftp.mkd('webpages')
+            ftp.cwd('webpages')
+        
+        # 上传文件
+        html_bytes = html_content.encode('utf-8')
+        ftp.storbinary(f'STOR {new_filename}', BytesIO(html_bytes))
+        
+        # 关闭FTP连接
+        ftp.quit()
+        
+        # 生成访问链接
+        access_url = f"https://www.tkyktbackup.com/webpages/{new_filename}"
+        
+        return True, access_url, new_filename
+        
+    except Exception as e:
+        return False, str(e), None
+
 def generate_html_file(questions, filename, stats):
     """生成HTML文件"""
     try:
@@ -331,7 +374,7 @@ def main():
     """主函数"""
     # 页面标题
     st.markdown('<h1 class="header-title">📚 题目大师</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">选择或导入Excel生成做题程序。生成的程序可以在线使用，也可以下载到本地。</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">智能题库生成器 - 让学习更高效</p>', unsafe_allow_html=True)
     
     # 功能介绍
     with st.expander("📖 功能介绍", expanded=False):
@@ -528,15 +571,46 @@ def main():
                         """)
                     
                     with col2:
-                        # 单个文件下载按钮
-                        st.download_button(
-                            label="📥 下载",
-                            data=file_info['html_content'].encode('utf-8'),
-                            file_name=file_info['html_filename'],
-                            mime="text/html",
-                            key=f"download_single_{i}",
-                            use_container_width=True
-                        )
+                        # 创建两个子列用于下载和生成链接按钮
+                        btn_col1, btn_col2 = st.columns(2)
+                        
+                        with btn_col1:
+                            # 单个文件下载按钮
+                            st.download_button(
+                                label="📥 下载",
+                                data=file_info['html_content'].encode('utf-8'),
+                                file_name=file_info['html_filename'],
+                                mime="text/html",
+                                key=f"download_single_{i}",
+                                use_container_width=True
+                            )
+                        
+                        with btn_col2:
+                            # 生成链接按钮
+                            if st.button(
+                                label="🔗 生成链接",
+                                key=f"generate_link_{i}",
+                                use_container_width=True,
+                                help="上传到服务器并生成在线访问链接"
+                            ):
+                                # 显示上传进度
+                                with st.spinner('正在上传到服务器...'):
+                                    success, result, new_filename = upload_to_ftp(
+                                        file_info['html_content'], 
+                                        file_info['html_filename']
+                                    )
+                                
+                                if success:
+                                    st.success(f"✅ 上传成功！")
+                                    st.info(f"📁 服务器文件名：{new_filename}")
+                                    st.markdown(f"🔗 **访问链接：** [{result}]({result})")
+                                    
+                                    # 提供链接复制功能
+                                    st.code(result, language=None)
+                                    st.caption("💡 点击上方链接框可以选中并复制链接")
+                                else:
+                                    st.error(f"❌ 上传失败：{result}")
+                                    st.info("请检查网络连接或联系管理员")
                     
                     # HTML预览区域
                     st.markdown("**📱 HTML预览：**")
@@ -627,7 +701,7 @@ def main():
 
     
     # 备份功能
-    if st.button("💾 备份(注意：不是本地使用不要点击，否则页面会无响应！！！)", use_container_width=True):
+    if st.button("💾 备份项目到百度网盘同步文件夹", use_container_width=True):
         with st.spinner("正在备份项目..."):
             success, result = create_backup()
             if success:
