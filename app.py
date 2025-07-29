@@ -69,7 +69,7 @@ st.markdown("""
         border-radius: 15px;
         padding: 2rem;
         box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        margin: 2rem 0;
+        margin: 0 0 2rem 0;
     }
     
     .stats-grid {
@@ -143,11 +143,14 @@ def detect_question_type(row):
     else:
         return 'fill'  # 只有一个选项，当作填空题处理
 
-def process_excel_file(uploaded_file):
+def process_excel_file(file_obj):
     """处理Excel文件并生成题目数据"""
     try:
         # 读取Excel文件
-        df = pd.read_excel(uploaded_file)
+        if hasattr(file_obj, 'path'):  # 本地文件
+            df = pd.read_excel(file_obj.path)
+        else:  # 上传的文件
+            df = pd.read_excel(file_obj)
         
         # 检查必需的列
         required_columns = ['题干', '答案']
@@ -179,13 +182,22 @@ def process_excel_file(uploaded_file):
             
             if question_type == 'choice':
                 options = []
-                for opt_col in ['选项A', '选项B', '选项C', '选项D']:
+                option_mapping = {}
+                for i, opt_col in enumerate(['选项A', '选项B', '选项C', '选项D']):
                     if opt_col in row and pd.notna(row[opt_col]):
                         opt_text = str(row[opt_col]).strip()
                         if opt_text and opt_text.lower() != 'nan':
                             options.append(opt_text)
+                            # 建立字母到选项内容的映射
+                            option_mapping[chr(65 + i)] = opt_text  # A=65, B=66, C=67, D=68
                 
                 question_data['options'] = options
+                
+                # 将答案字母转换为对应的选项内容
+                answer_letter = str(row['答案']).strip().upper()
+                if answer_letter in option_mapping:
+                    question_data['answer'] = option_mapping[answer_letter]
+                
                 stats['choice'] += 1
                 
                 if len(options) == 3:
@@ -284,13 +296,42 @@ def generate_html_file(questions, filename, stats):
     except Exception as e:
         return None
 
-
+def create_backup():
+    """创建项目备份"""
+    try:
+        # 生成带时间戳的备份文件夹名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_base_dir = "D:\\BaiduSyncdisk\\坦克云课堂题目大师"
+        backup_dir = os.path.join(backup_base_dir, f"坦克云课堂题目大师2_{timestamp}")
+        current_dir = os.getcwd()
+        
+        # 确保备份目录存在
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        # 复制整个项目
+        for item in os.listdir(current_dir):
+            if item.startswith('.') or item == '__pycache__':
+                continue
+                
+            source_path = os.path.join(current_dir, item)
+            dest_path = os.path.join(backup_dir, item)
+            
+            if os.path.isdir(source_path):
+                if os.path.exists(dest_path):
+                    shutil.rmtree(dest_path)
+                shutil.copytree(source_path, dest_path)
+            else:
+                shutil.copy2(source_path, dest_path)
+        
+        return True, "备份成功"
+    except Exception as e:
+        return False, str(e)
 
 def main():
     """主函数"""
     # 页面标题
     st.markdown('<h1 class="header-title">📚 题目大师</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">智能题库生成器 - 让学习更高效</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">选择或导入Excel生成做题程序。生成的程序可以在线使用，也可以下载到本地。</p>', unsafe_allow_html=True)
     
     # 功能介绍
     with st.expander("📖 功能介绍", expanded=False):
@@ -318,17 +359,74 @@ def main():
         - **填空题**：所有选项字段为空
         """)
     
-    # 文件上传区域
-    st.markdown('<div class="upload-text">📁 上传Excel文件</div>', unsafe_allow_html=True)
-    uploaded_files = st.file_uploader(
-        "选择Excel文件",
-        type=['xlsx', 'xls'],
-        accept_multiple_files=True,
-        help="支持批量上传多个Excel文件"
-    )
+    # 创建两个选项卡：从input文件夹选择和上传文件
+    tab1, tab2 = st.tabs(["📂 从input文件夹选择", "📁 上传Excel文件"])
     
-    if uploaded_files:
-        st.markdown('<div class="success-box">✅ 文件上传成功！正在处理...</div>', unsafe_allow_html=True)
+    uploaded_files = None
+    selected_files = None
+    
+    with tab1:
+        st.markdown('<div class="upload-text">📂 从input文件夹选择Excel文件</div>', unsafe_allow_html=True)
+        
+        # 获取input文件夹中的Excel文件
+        input_folder = "input"
+        if not os.path.exists(input_folder):
+            os.makedirs(input_folder)
+        
+        excel_files = []
+        if os.path.exists(input_folder):
+            for file in os.listdir(input_folder):
+                if file.lower().endswith(('.xlsx', '.xls')):
+                    excel_files.append(file)
+        
+        if excel_files:
+            st.markdown(f'<div class="info-box">📋 发现 {len(excel_files)} 个Excel文件</div>', unsafe_allow_html=True)
+            
+            # 多选框选择文件
+            selected_file_names = st.multiselect(
+                "选择要处理的Excel文件（可多选）",
+                excel_files,
+                help="可以选择多个文件进行批量处理"
+            )
+            
+            if selected_file_names:
+                # 创建文件对象列表
+                selected_files = []
+                for filename in selected_file_names:
+                    file_path = os.path.join(input_folder, filename)
+                    # 创建一个类似于uploaded_file的对象
+                    class LocalFile:
+                        def __init__(self, path, name):
+                            self.path = path
+                            self.name = name
+                        
+                        def read(self):
+                            with open(self.path, 'rb') as f:
+                                return f.read()
+                    
+                    selected_files.append(LocalFile(file_path, filename))
+                
+                st.markdown(f'<div class="success-box">✅ 已选择 {len(selected_files)} 个文件</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="info-box">📝 input文件夹中暂无Excel文件<br>请将Excel文件放入input文件夹，或使用上传功能</div>', unsafe_allow_html=True)
+    
+    with tab2:
+        st.markdown('<div class="upload-text">📁 上传Excel文件</div>', unsafe_allow_html=True)
+        uploaded_files = st.file_uploader(
+            "选择Excel文件",
+            type=['xlsx', 'xls'],
+            accept_multiple_files=True,
+            help="支持批量上传多个Excel文件"
+        )
+    
+    # 合并处理逻辑
+    files_to_process = uploaded_files if uploaded_files else selected_files
+    
+    if files_to_process:
+        if uploaded_files:
+            st.markdown('<div class="success-box">✅ 文件上传成功！正在处理...</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="success-box">✅ 文件选择成功！正在处理...</div>', unsafe_allow_html=True)
         
         # 处理文件
         processed_files = []
@@ -337,27 +435,27 @@ def main():
         progress_bar = st.progress(0)
         status_text = st.empty()
         
-        for i, uploaded_file in enumerate(uploaded_files):
-            status_text.text(f"正在处理: {uploaded_file.name} ({i+1}/{len(uploaded_files)})")
+        for i, file_obj in enumerate(files_to_process):
+            status_text.text(f"正在处理: {file_obj.name} ({i+1}/{len(files_to_process)})")
             
             # 处理Excel文件
-            questions, stats = process_excel_file(uploaded_file)
+            questions, stats = process_excel_file(file_obj)
             
             if questions is None:
-                st.error(f"❌ 处理文件 {uploaded_file.name} 时出错: {stats}")
+                st.error(f"❌ 处理文件 {file_obj.name} 时出错: {stats}")
                 continue
             
             # 生成HTML文件
-            html_content = generate_html_file(questions, uploaded_file.name, stats)
+            html_content = generate_html_file(questions, file_obj.name, stats)
             
             if html_content is None:
-                st.error(f"❌ 生成HTML文件 {uploaded_file.name} 时出错")
+                st.error(f"❌ 生成HTML文件 {file_obj.name} 时出错")
                 continue
             
             # 保存处理结果
             processed_files.append({
-                'filename': uploaded_file.name,
-                'html_filename': os.path.splitext(uploaded_file.name)[0] + '.html',
+                'filename': file_obj.name,
+                'html_filename': os.path.splitext(file_obj.name)[0] + '.html',
                 'html_content': html_content,
                 'stats': stats
             })
@@ -367,7 +465,7 @@ def main():
                 total_stats[key] += stats[key]
             
             # 更新进度
-            progress_bar.progress((i + 1) / len(uploaded_files))
+            progress_bar.progress((i + 1) / len(files_to_process))
         
         status_text.text("处理完成！")
         
@@ -409,8 +507,6 @@ def main():
                     <div class="stat-label">填空题</div>
                 </div>
                 """, unsafe_allow_html=True)
-            
-
             
             # HTML文件列表和预览区域
             st.markdown("### 📄 生成的HTML文件列表")
@@ -528,6 +624,16 @@ def main():
             
 
     
+
+    
+    # 备份功能
+    if st.button("💾 备份(注意：不是本地使用不要点击，否则页面会无响应！！！)", use_container_width=True):
+        with st.spinner("正在备份项目..."):
+            success, result = create_backup()
+            if success:
+                st.success(f"✅ {result}")
+            else:
+                st.error(f"❌ 备份失败: {result}")
     
     # 页脚信息
     st.markdown("---")
