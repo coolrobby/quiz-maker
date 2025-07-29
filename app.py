@@ -462,7 +462,7 @@ def main():
     """主函数"""
     # 页面标题
     st.markdown('<h1 class="header-title">📚 Quiz Maker</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">将excel转成答题网页，可以直接预览、下载及生成分享链接</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">川哥做的小工具。将Excel转成答题网页，可以直接预览、下载及生成分享链接</p>', unsafe_allow_html=True)
     
     # 功能介绍
     with st.expander("📖 功能介绍", expanded=False):
